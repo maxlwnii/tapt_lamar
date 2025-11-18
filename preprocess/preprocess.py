@@ -293,7 +293,7 @@ def combine_eclip_fasta(sequences, eclip_peaks):
     return combined
 
 
-def sliding_window(seq_id, seq, eclip_peaks_local, max_len=1024, stride=256):
+def sliding_window(seq_id, seq, eclip_peaks_local, max_len=512, stride=256):
     """
     Sequences longer than max_length but not considered very long are split into overlapping windows
     using a pre-defined fix-size stride.
@@ -376,18 +376,14 @@ def sliding_window(seq_id, seq, eclip_peaks_local, max_len=1024, stride=256):
     return windows
 
 
-def weighted_sampling(combined, seq, max_len=1024):
+def weighted_sampling(combined, seq, max_len=512):
     """
     "Very" long sequences are processed by selecting sqrt(#binding_sites) random windows of size max_len.
     Sample around coordinates provided by eCLIP peaks.
     """
     windows = []
-    max_sample = np.sqrt(seq['num_binding_sites']).astype(int)
-
     # Sample at least once from every sequence.
-    if max_sample < 1:
-        max_sample = 1
-    
+
     seq_id = seq['seq_id']
     seq_length = seq['seq_len']
     full_sequence = seq['sequence']
@@ -395,7 +391,7 @@ def weighted_sampling(combined, seq, max_len=1024):
     peaks_list = combined.get(seq_id, {}).get('peaks', [])
     eCLIP_binding = len(peaks_list)
 
-    for _ in range(min(eCLIP_binding, max_sample)):
+    for _ in range(eCLIP_binding):
         peak = np.random.choice(peaks_list)
         peak_start = peak['peak_start']
         peak_end = peak['peak_end']
@@ -438,7 +434,7 @@ def weighted_sampling(combined, seq, max_len=1024):
     return windows
 
 
-def preprocess_sequences(sequences, peaks_dict, combined, max_len=1024, stride=256):
+def preprocess_sequences(sequences, peaks_dict, combined, max_len=512, stride=256):
     """Preprocess sequences based on their lengths."""
     processed_data = []
     stats = {
@@ -488,7 +484,7 @@ def preprocess_sequences(sequences, peaks_dict, combined, max_len=1024, stride=2
             stats['short_padded'] += 1
             stats['total_windows'] += 1
 
-        elif seq_len <= 6 * max_len:
+        elif seq_len <= 12 * max_len:
             # Medium sequences: sliding window
             windows = sliding_window(seq_id, full_sequence, eclip_peaks_local, max_len, stride)
             processed_data.extend(windows)
@@ -518,16 +514,15 @@ def save_processed_data(processed_data, output_prefix):
     for item in processed_data:
         meta_dict = {}
         for k, v in item.items():
-            if k != 'sequence':
-                # Convert numpy types to Python native types
-                if hasattr(v, 'item'):  # numpy scalar
-                    meta_dict[k] = v.item()
-                elif isinstance(v, (np.integer, np.int64, np.int32)):
-                    meta_dict[k] = int(v)
-                elif isinstance(v, (np.floating, np.float64, np.float32)):
-                    meta_dict[k] = float(v)
-                else:
-                    meta_dict[k] = v
+               # Convert numpy types to Python native types
+            if hasattr(v, 'item'):  # numpy scalar
+                meta_dict[k] = v.item()
+            elif isinstance(v, (np.integer, np.int64, np.int32)):
+                meta_dict[k] = int(v)
+            elif isinstance(v, (np.floating, np.float64, np.float32)):
+                meta_dict[k] = float(v)
+            else:
+                meta_dict[k] = v
         metadata.append(meta_dict)
     
     with open(f'{output_prefix}_metadata.json', 'w') as f:
@@ -602,7 +597,7 @@ def main():
     parser.add_argument('--bed', type=str, required=True, help='Path to the BED file with eCLIP peaks.')
     parser.add_argument('--eclip', type=str, required=True, help='Path to the eCLIP BED file.')
     parser.add_argument('--output', type=str, required=False, help='Path to the output JSON file.')
-    parser.add_argument('--max_len', type=int, default=1024, help='Maximum length of sequences.')
+    parser.add_argument('--max_len', type=int, default=512, help='Maximum length of sequences.')
     parser.add_argument('--stride', type=int, default=256, help='Stride for sliding window.')
     parser.add_argument('--merge_peaks', action='store_true', help='Merge overlapping eCLIP peaks.')
     
